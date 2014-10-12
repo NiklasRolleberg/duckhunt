@@ -19,12 +19,10 @@ namespace ducks
 struct HMM {
     const int N = 9;
     const int M = 9;
-    int T;
+    bool done = false;
     double**A;
     double**B;
     double*q;
-
-    double* seq;
 
     HMM()
     {
@@ -42,17 +40,48 @@ struct HMM {
         /*start guess*/
         //A
         for(int i=0;i<N;++i)
+        {
+            double sum = 0;
             for(int j=0;j<N;++j)
-                A[j][i] = 1.0/N;
+            {
+                double r = (rand()%100)+1;
+                sum+=r;
+                A[j][i] = r;
+            }
+            for(int j=0;j<N;++j)
+            {
+                A[j][i] = A[j][i]/sum;
+            }
+        }
 
         //B
         for(int i=0;i<M;++i)
+        {
+            double sum = 0;
             for(int j=0;j<N;++j)
-                B[j][i] = 1.0/N;
+            {
+                double r = (rand()%100)+1;
+                sum+=r;
+                B[j][i] = r;
+            }
+            for(int j=0;j<N;++j)
+            {
+                B[j][i] = B[j][i]/sum;
+            }
+        }
 
         //q
-        for(int i=0;i<N;++i)
-            q[i] = 1.0/N;
+        double sum = 0;
+        for(int j=0;j<N;++j)
+        {
+            double r = (rand()%100)+1;
+            sum+=r;
+            q[j] = r;
+        }
+        for(int j=0;j<N;++j)
+        {
+            q[j] = q[j]/sum;
+        }
     }
 
     double** initialize(int rows, int cols)
@@ -64,8 +93,103 @@ struct HMM {
         return temp;
     }
 
-    void BaumWelch(int* seq, int T)
+    double probability(std::vector<int> seq)
     {
+        int T = (int)seq.size();
+        for(int t=0;t<(int)seq.size();++t)
+            if(seq[t] == -1)
+            {
+                T = t;
+                break;
+            }
+        double alpha[T][N];
+
+        //alpha-0
+        double c;
+        for(int i=0;i<N;++i)
+        {
+            alpha[0][i] = q[i]*B[i][seq[0]];
+            c+=alpha[0][i];
+        }
+        c=1/c;
+        for(int i=0;i<N;++i)
+            alpha[0][i] *=c;
+
+        //alpha-t
+        for(int t=1;t<T;++t)
+        {
+            for(int i=0;i<N;++i)
+            {
+                alpha[t][i] = 0;
+                for(int j=0;j<N;++j)
+                {
+                    alpha[t][i] += alpha[t-1][j]*A[j][i];
+                }
+                alpha[t][i] *= B[i][seq[t]];
+                c+=alpha[t][i];
+            }
+            c=1/c;
+            for(int i=0;i<N;++i)
+                alpha[0][i] *=c;
+        }
+        double sum = 0;
+        for(int i=0;i<N;++i)
+            sum+=alpha[T-1][i];
+        return sum;
+    }
+
+    void BaumWelch(std::vector<int> seq)
+    {
+        if(done)
+        {
+            //std::cerr << "done learning" << std::endl;
+            //return;
+            double sum = 0;
+            for(int j=0;j<N;++j)
+            {
+                double r = (rand()%100)+1;
+                sum+=r;
+                q[j] = r;
+            }
+            for(int j=0;j<N;++j)
+            {
+                q[j] = q[j]/sum;
+            }
+        }
+        done = true;
+        std::cerr << "learning" << std::endl;
+
+        int T = (int)seq.size();
+        for(int t=0;t<(int)seq.size();++t)
+            if(seq[t] == -1)
+            {
+                T = t;
+                break;
+            }
+        /*
+        std::cerr << "BaumWelch \nT = " << T << std::endl;
+        std::cerr << "seq: ";
+        for(int t=0;t<T;++t)
+            std::cerr << seq[t] << " ";
+        std::cerr << std::endl;
+
+        std::cerr << "\nA"<<std::endl;
+        for(int i=0;i<N;++i)
+        {
+            for(int j=0;j<N;++j)
+                std::cerr << A[i][j] << " ";
+            std::cerr << std::endl;
+        }
+
+        std::cerr << "\nB"<<std::endl;
+        for(int i=0;i<N;++i)
+        {
+            for(int j=0;j<N;++j)
+                std::cerr << B[i][j] << " ";
+            std::cerr << std::endl;
+        }
+        */
+
         int MaxItter = 30;
         int itter = 0;
         double OldLogProb = -std::numeric_limits<double>::max();
@@ -167,7 +291,7 @@ struct HMM {
             /**----------Estimate A,b,q------------------*/
 
 
-            int digits = 5;
+            //int digits = 5;
 
             /*q*/
             for(int i=0;i<N;++i)
@@ -185,8 +309,9 @@ struct HMM {
                         numer += diGamma[t][i][j];
                         denom += Gamma[t][i];
                     }
-                //A[i][j] = numer/denom;
-                A[i][j] = round((numer/denom)*pow(10,digits))/pow(10,digits);
+                A[i][j] = numer/denom;
+                //A[i][j] = round((numer/denom)*pow(10,digits))/pow(10,digits);
+                //std::cerr << "A : numer=" << numer <<", denom=" << denom << std::endl;
                 }
             }
 
@@ -203,8 +328,9 @@ struct HMM {
                             numer += Gamma[t][i];
                         denom += Gamma[t][i];
                     }
-                //B[i][j] = numer/denom;
-                B[i][j] = round((numer/denom)*pow(10,digits))/pow(10,digits);
+                B[i][j] = numer/denom;
+                //B[i][j] = round((numer/denom)*pow(10,digits))/pow(10,digits);
+                //std::cerr << "B : numer=" << numer <<", denom=" << denom << std::endl;
                 }
             }
 
@@ -219,10 +345,26 @@ struct HMM {
             if(logProb <= OldLogProb)
             {
                 GO = false;
+                std::cerr << "Convergerad!, itterationer: "<< itter << std::endl;
             }
 
             OldLogProb = logProb;
             itter++;
+        }
+
+        std::cerr << "BaumWelch Done\nA"<< std::endl;
+        for(int i=0;i<N;++i)
+        {
+            for(int j=0;j<N;++j)
+                std::cerr<< A[i][j] << " ";
+            std::cerr << std::endl;
+        }
+        std::cerr << "B"<<std::endl;
+        for(int i=0;i<N;++i)
+        {
+            for(int j=0;j<N;++j)
+                std::cerr<< B[i][j] << " ";
+            std::cerr << std::endl;
         }
     }
 

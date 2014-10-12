@@ -5,30 +5,30 @@
 namespace ducks
 {
 
-HMM Bird01;
+HMM BirdModel[6];
 
 Player::Player()
 {
 
     std::cerr <<"A"<<std::endl;
-    for(int i=0;i<Bird01.N;++i)
+    for(int i=0;i<BirdModel[0].N;++i)
     {
-        for(int j=0;j<Bird01.N;++j)
-            std::cerr << Bird01.A[i][j] << " ";
+        for(int j=0;j<BirdModel[0].N;++j)
+            std::cerr << BirdModel[0].A[i][j] << " ";
         std::cerr << std::endl;
     }
 
     std::cerr <<"B"<<std::endl;
-    for(int i=0;i<Bird01.N;++i)
+    for(int i=0;i<BirdModel[0].N;++i)
     {
-        for(int j=0;j<Bird01.M;++j)
-            std::cerr << Bird01.B[i][j] << " ";
+        for(int j=0;j<BirdModel[0].M;++j)
+            std::cerr << BirdModel[0].B[i][j] << " ";
         std::cerr << std::endl;
     }
 
     std::cerr <<"q"<<std::endl;
-    for(int i=0;i<Bird01.N;++i)
-        std::cerr << Bird01.q[i] << " ";
+    for(int i=0;i<BirdModel[0].N;++i)
+        std::cerr << BirdModel[0].q[i] << " ";
     std::cerr<<std::endl;
 }
 
@@ -56,8 +56,54 @@ std::vector<ESpecies> Player::guess(const GameState &pState, const Deadline &pDu
      * This skeleton makes no guesses, better safe than sorry!
      */
 
+    std::vector<ESpecies> lGuesses(pState.getNumBirds());//SPECIES_UNKNOWN);
     std::cerr << "\nGuess" << std::endl;
-    std::vector<ESpecies> lGuesses(pState.getNumBirds(), SPECIES_PIGEON);//SPECIES_UNKNOWN);
+
+    std::cerr << "\ndebug:" << lGuesses.size() << std::endl;
+
+    for(int i=0;i<(int)pState.getNumBirds();++i)
+    {
+        int N = pState.getBird(i).getSeqLength();
+        std::vector<int> seq;
+        for(int j=0;j<N;++j)
+        {
+            seq.push_back(pState.getBird(i).getObservation(j));
+        }
+        int index = -1;
+        double maximum = 0;
+        for(int bird=0;bird<6;++bird)
+        {
+            if(BirdModel[bird].done)
+            {
+                double prob = BirdModel[bird].probability(seq);
+                if(prob > maximum)
+                {
+                    index = bird;
+                    maximum = prob;
+                }
+            }
+
+        }
+
+        switch (index)
+        {
+        case 0: lGuesses[i]=SPECIES_PIGEON;
+            break;
+        case 1: lGuesses[i]=SPECIES_RAVEN;
+            break;
+        case 3: lGuesses[i]=SPECIES_SKYLARK;
+            break;
+        case 4: lGuesses[i]=SPECIES_SNIPE;
+            break;
+        case 5: lGuesses[i]=SPECIES_BLACK_STORK;
+            break;
+        default: lGuesses[i] = SPECIES_PIGEON; //SPECIES_UNKNOWN;
+            break;
+        }
+        std::cerr << "det är nog en: " << index << " med " << maximum << " sannolikhet"<< std::endl;
+        //break;
+    }
+    std::cerr << "guess done" << std::endl;
     return lGuesses;
 }
 
@@ -75,48 +121,12 @@ void Player::reveal(const GameState &pState, const std::vector<ESpecies> &pSpeci
      * If you made any guesses, you will find out the true species of those birds in this function.
      */
      std::cerr << "REVEAL" << std::endl;
-     int n = pState.getBird(0).getSeqLength();
-     int seq[n];
-     for(int i=0;i<n;++i)
-     {
-         int temp = pState.getBird(0).getObservation(i);
-         if(temp < 0)
-         {
-            n = i;
-            break;
-         }
-         seq[i] = temp;
-     }
-
-    Bird01.BaumWelch(seq,n);
-
-    std::cerr <<"A"<<std::endl;
-    for(int i=0;i<Bird01.N;++i)
-    {
-        for(int j=0;j<Bird01.N;++j)
-            std::cerr << Bird01.A[i][j] << " ";
-        std::cerr << std::endl;
-    }
-
-    std::cerr <<"B"<<std::endl;
-    for(int i=0;i<Bird01.N;++i)
-    {
-        for(int j=0;j<Bird01.M;++j)
-            std::cerr << Bird01.B[i][j] << " ";
-        std::cerr << std::endl;
-    }
-
-    std::cerr <<"q"<<std::endl;
-    for(int i=0;i<Bird01.N;++i)
-        std::cerr << Bird01.q[i] << " ";
-    std::cerr<<std::endl;
-
-    /*
-     std::cerr <<"Det var:"<< std::endl;
 
      for(int i=0;i<(int)pSpecies.size();++i)
      {
-        if(pSpecies[i] == SPECIES_PIGEON)
+         std::cerr << "Det var en " << pSpecies[i] << std::endl;
+         /*
+         if(pSpecies[i] == SPECIES_PIGEON)
             std::cerr << "det var en PIGEON ";
         else if(pSpecies[i] == SPECIES_RAVEN)
             std::cerr << "det var en RAVEN ";
@@ -130,13 +140,46 @@ void Player::reveal(const GameState &pState, const std::vector<ESpecies> &pSpeci
             std::cerr << "det var en BLACK_STORK ";
         else
             std::cerr << "fel fel fel fel ";
-
-        int N = pState.getBird(0).getSeqLength();
-        for(int j=0; j<N;++j)
-            std::cerr << pState.getBird(0).getObservation(j) <<" ";
+        */
+         int N = pState.getBird(i).getSeqLength();
+         std::vector<int> seq;
+         for(int j=0;j<N;++j)
+         {
+             seq.push_back(pState.getBird(i).getObservation(j));
+         }
+        /*
+        for(int j=0;j<(int)seq.size();++j)
+            std::cerr << seq[j] << " ";
         std::cerr << std::endl;
-    }
-    */
+        */
+        BirdModel[i].BaumWelch(seq);
+
+        /*
+        if(i==0)
+        {
+            BirdModel[0].BaumWelch(seq);
+            std::cerr <<"A"<<std::endl;
+            for(int i=0;i<BirdModel[0].N;++i)
+            {
+                for(int j=0;j<BirdModel[0].N;++j)
+                    std::cerr << BirdModel[0].A[i][j] << " ";
+                std::cerr << std::endl;
+            }
+
+            std::cerr <<"B"<<std::endl;
+            for(int i=0;i<BirdModel[0].N;++i)
+            {
+                for(int j=0;j<BirdModel[0].M;++j)
+                    std::cerr << BirdModel[0].B[i][j] << " ";
+                std::cerr << std::endl;
+            }
+
+            std::cerr <<"q"<<std::endl;
+            for(int i=0;i<BirdModel[0].N;++i)
+                std::cerr << BirdModel[0].q[i] << " ";
+            std::cerr<<std::endl;
+        }*/
+     }
 }
 
 
