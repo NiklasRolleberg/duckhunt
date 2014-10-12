@@ -17,8 +17,8 @@ namespace ducks
 
 
 struct HMM {
-    const int N = 9;
-    const int M = 9;
+    int N = 9;
+    int M = 9;
     bool done = false;
     double**A;
     double**B;
@@ -46,11 +46,11 @@ struct HMM {
             {
                 double r = (rand()%100)+1;
                 sum+=r;
-                A[j][i] = r;
+                A[i][j] = r;
             }
             for(int j=0;j<N;++j)
             {
-                A[j][i] = A[j][i]/sum;
+                A[i][j] = A[i][j]/sum;
             }
         }
 
@@ -62,11 +62,11 @@ struct HMM {
             {
                 double r = (rand()%100)+1;
                 sum+=r;
-                B[j][i] = r;
+                B[i][j] = r;
             }
             for(int j=0;j<N;++j)
             {
-                B[j][i] = B[j][i]/sum;
+                B[i][j] = B[i][j]/sum;
             }
         }
 
@@ -93,6 +93,85 @@ struct HMM {
         return temp;
     }
 
+    std::vector<int> Viterbi(std::vector<int> seq)
+    {
+        int state;
+
+        int T = (int)seq.size();
+        for(int t=0;t<(int)seq.size();++t)
+            if(seq[t] == -1)
+            {
+                T = t;
+                break;
+            }
+
+        double maximum = -std::numeric_limits<double>::max();
+
+        double* tempArray = (double*)calloc(N,sizeof(double));
+        double* prob = (double*)calloc(N,sizeof(double));
+        int sequences[T][N];
+
+        //t=0;
+        for(int i=0;i<N;++i)
+        {
+            prob[i] = q[i]*B[i][seq[0]];
+            int index = 0;
+            if(prob[i]> maximum)
+            {
+                maximum = prob[i];
+                index = i;
+            }
+            sequences[0][i] = index;
+        }
+
+        for(int t=1;t<T;++t)
+        {
+            state = seq[t];
+            for(int i=0;i<N;++i)
+            {
+                maximum = prob[0] * A[0][i]* B[i][state];
+                int index = 0;
+                for(int k=1;k<N;++k)
+                {
+                    double te = prob[k] * A[k][i] * B[i][state];
+                    if(te > maximum)
+                    {
+                        maximum = te;
+                        index = k;
+                    }
+                }
+                //std::cerr << index <<"  "<< maximum << std::endl;
+                tempArray[i] = maximum;
+                sequences[t][i] = index;
+            }
+
+            for(int i=0;i<N;++i)
+                prob[i] = tempArray[i];
+        }
+
+        int current = 0;
+        maximum = prob[0];
+        for(int i=1;i<N;++i)
+        {
+            if(prob[i]>maximum)
+            {
+                maximum = prob[i];
+                current = i;
+            }
+        }
+
+        std::vector<int> e(T);
+        int t2=0;
+        for(int t = (T-1);t>=0 ;t--)
+        {
+            //e.push_back(current);
+            e[t2] = current;
+            current = sequences[t][current];
+            t2++;
+        }
+        return e;
+    }
+
     double probability(std::vector<int> seq)
     {
         int T = (int)seq.size();
@@ -111,7 +190,7 @@ struct HMM {
             alpha[0][i] = q[i]*B[i][seq[0]];
             c+=alpha[0][i];
         }
-        c=1/c;
+        c=1./c;
         for(int i=0;i<N;++i)
             alpha[0][i] *=c;
 
@@ -128,13 +207,13 @@ struct HMM {
                 alpha[t][i] *= B[i][seq[t]];
                 c+=alpha[t][i];
             }
-            c=1/c;
+            c=1./c;
             for(int i=0;i<N;++i)
                 alpha[0][i] *=c;
         }
         double sum = 0;
         for(int i=0;i<N;++i)
-            sum+=alpha[T-1][i];
+            sum+=log(alpha[T-1][i]);
         return sum;
     }
 
@@ -142,8 +221,10 @@ struct HMM {
     {
         if(done)
         {
-            //std::cerr << "done learning" << std::endl;
-            //return;
+            //std::cerr << "Re-learning" << std::endl;
+            return;
+            /*
+
             double sum = 0;
             for(int j=0;j<N;++j)
             {
@@ -154,10 +235,10 @@ struct HMM {
             for(int j=0;j<N;++j)
             {
                 q[j] = q[j]/sum;
-            }
+            }*/
         }
         done = true;
-        std::cerr << "learning" << std::endl;
+        //std::cerr << "learning" << std::endl;
 
         int T = (int)seq.size();
         for(int t=0;t<(int)seq.size();++t)
@@ -166,6 +247,7 @@ struct HMM {
                 T = t;
                 break;
             }
+        //std::cerr << "seq.size():  "<< seq.size() << " T=" << T << " seq[T-1]=" << seq[T-1] <<std::endl;
         /*
         std::cerr << "BaumWelch \nT = " << T << std::endl;
         std::cerr << "seq: ";
@@ -189,8 +271,8 @@ struct HMM {
             std::cerr << std::endl;
         }
         */
-
-        int MaxItter = 30;
+        //int digits = 2;
+        int MaxItter = 500;
         int itter = 0;
         double OldLogProb = -std::numeric_limits<double>::max();
 
@@ -290,9 +372,6 @@ struct HMM {
 
             /**----------Estimate A,b,q------------------*/
 
-
-            //int digits = 5;
-
             /*q*/
             for(int i=0;i<N;++i)
                 q[i] = Gamma[0][i];
@@ -339,20 +418,20 @@ struct HMM {
                 logProb += log(c[t]);
             logProb *= -1;
 
-            //std::cout << "logProb: " << logProb <<std::endl;
-            //std::cout << "OldLogProb: " << OldLogProb <<std::endl;
+            //std::cerr << "\nlogProb: " << logProb  << "\nOldLogProb: " << OldLogProb <<std::endl;
 
             if(logProb <= OldLogProb)
             {
                 GO = false;
-                std::cerr << "Convergerad!, itterationer: "<< itter << std::endl;
+                //std::cerr << "Convergerad!, itterationer: "<< itter << std::endl;
             }
 
             OldLogProb = logProb;
             itter++;
         }
 
-        std::cerr << "BaumWelch Done\nA"<< std::endl;
+        std::cerr << "BaumWelch Done\nItter: "<<itter-1 << "\nA"<< std::endl;
+
         for(int i=0;i<N;++i)
         {
             for(int j=0;j<N;++j)
@@ -366,6 +445,10 @@ struct HMM {
                 std::cerr<< B[i][j] << " ";
             std::cerr << std::endl;
         }
+        std::cerr <<"q"<< std::endl;
+        for(int i=0;i<N;++i)
+            std::cerr << q[i] << " ";
+        std::cerr << std::endl;
     }
 
 };

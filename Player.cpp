@@ -9,7 +9,7 @@ HMM BirdModel[6];
 
 Player::Player()
 {
-
+    std::cerr << "Start:" << std::endl;
     std::cerr <<"A"<<std::endl;
     for(int i=0;i<BirdModel[0].N;++i)
     {
@@ -34,6 +34,31 @@ Player::Player()
 
 Action Player::shoot(const GameState &pState, const Deadline &pDue)
 {
+    /**TEST*/
+
+    HMM test;
+    test.A = test.initialize(4,4);
+    test.B = test.initialize(4,4);
+    test.q = (double*)calloc(4,sizeof(double));
+    test.N = 4;
+    test.M = 4;
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+    /**</TEST>*/
     //std::cerr << "Shoot" << std::endl;
     /*
      * Here you should write your clever algorithms to get the best action.
@@ -56,11 +81,11 @@ std::vector<ESpecies> Player::guess(const GameState &pState, const Deadline &pDu
      * This skeleton makes no guesses, better safe than sorry!
      */
 
-    std::vector<ESpecies> lGuesses(pState.getNumBirds());//SPECIES_UNKNOWN);
+    std::vector<ESpecies> lGuesses(pState.getNumBirds(),SPECIES_PIGEON);//SPECIES_UNKNOWN);
     std::cerr << "\nGuess" << std::endl;
 
-    std::cerr << "\ndebug:" << lGuesses.size() << std::endl;
-
+    //std::cerr << "\Birds: " << lGuesses.size() << std::endl;
+    /*
     for(int i=0;i<(int)pState.getNumBirds();++i)
     {
         int N = pState.getBird(i).getSeqLength();
@@ -70,7 +95,7 @@ std::vector<ESpecies> Player::guess(const GameState &pState, const Deadline &pDu
             seq.push_back(pState.getBird(i).getObservation(j));
         }
         int index = -1;
-        double maximum = 0;
+        double maximum = -std::numeric_limits<double>::max();;
         for(int bird=0;bird<6;++bird)
         {
             if(BirdModel[bird].done)
@@ -82,7 +107,6 @@ std::vector<ESpecies> Player::guess(const GameState &pState, const Deadline &pDu
                     maximum = prob;
                 }
             }
-
         }
 
         switch (index)
@@ -103,7 +127,7 @@ std::vector<ESpecies> Player::guess(const GameState &pState, const Deadline &pDu
         std::cerr << "det är nog en: " << index << " med " << maximum << " sannolikhet"<< std::endl;
         //break;
     }
-    std::cerr << "guess done" << std::endl;
+    std::cerr << "guess done" << std::endl;*/
     return lGuesses;
 }
 
@@ -142,6 +166,7 @@ void Player::reveal(const GameState &pState, const std::vector<ESpecies> &pSpeci
             std::cerr << "fel fel fel fel ";
         */
          int N = pState.getBird(i).getSeqLength();
+         int bird = (int)pSpecies[i];
          std::vector<int> seq;
          for(int j=0;j<N;++j)
          {
@@ -152,12 +177,32 @@ void Player::reveal(const GameState &pState, const std::vector<ESpecies> &pSpeci
             std::cerr << seq[j] << " ";
         std::cerr << std::endl;
         */
-        BirdModel[i].BaumWelch(seq);
+        //std::cerr << "\nBird " << bird << std::endl;
+        //BirdModel[bird].BaumWelch(seq);
+
+        if(bird==0)
+        {
+            BirdModel[bird].BaumWelch(seq);
+            std::cerr << "Seq: \n";
+            for(int i=0;i<(int)seq.size();++i)
+                std::cerr << seq[i] << " ";
+
+            std::cerr <<"\nProbability of seq: " << BirdModel[bird].probability(seq);
+
+            //seq.push_back(0);
+            std::vector<int> ny = BirdModel[bird].Viterbi(seq);
+            std::cerr << "\nViterbi: \n";
+            for(int i=0;i<(int)ny.size();++i)
+                std::cerr << ny[i] << " ";
+            std::cerr <<"\nProbability for Viterbi seq: " << BirdModel[bird].probability(ny) << std::endl;
+
+            exit(0); //<--------------------------------------------SKA BORT!
+        }
 
         /*
-        if(i==0)
+        if(i==6)
         {
-            BirdModel[0].BaumWelch(seq);
+            BirdModel[6].BaumWelch(seq);
             std::cerr <<"A"<<std::endl;
             for(int i=0;i<BirdModel[0].N;++i)
             {
@@ -178,6 +223,7 @@ void Player::reveal(const GameState &pState, const std::vector<ESpecies> &pSpeci
             for(int i=0;i<BirdModel[0].N;++i)
                 std::cerr << BirdModel[0].q[i] << " ";
             std::cerr<<std::endl;
+
         }*/
      }
 }
