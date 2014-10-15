@@ -20,11 +20,12 @@ struct HMM {
     int birdID = -1;
     int N = 9;
     int M = 9;
-    bool converged = true;
+    int MaxItter = 200;
     double**A;
     double**B;
     double*q;
-    double*qT;
+    double*LastAlpha;
+    bool Converged = false;
 
     HMM()
     {
@@ -39,13 +40,74 @@ struct HMM {
             B[i] = (double*)calloc(M,sizeof(double));
         //q
         q = (double*)calloc(N,sizeof(double));
-        //qT q at last timestep
-        qT = (double*)calloc(N,sizeof(double));
+        //The last alpha
+        LastAlpha = (double*)calloc(N,sizeof(double));
+
+        //A
+        for(int i=0;i<N;++i)
+        {
+            double sum = 0;
+            for(int j=0;j<N;++j)
+            {
+                double r = (rand()%100)+1;
+                sum+=r;
+                A[i][j] = r;
+            }
+            for(int j=0;j<N;++j)
+            {
+                A[i][j] = A[i][j]/sum;
+            }
+
+            /*for(int j=0;j<N;++j)
+            {
+                if(i==j)
+                    A[i][j] = 0.6;
+                else
+                    A[i][j] = 0;
+            }*/
+        }
+
+        //B
+        for(int i=0;i<M;++i)
+        {
+            double sum = 0;
+            for(int j=0;j<N;++j)
+            {
+                double r = (rand()%100)+1;
+                sum+=r;
+                B[i][j] = r;
+            }
+            for(int j=0;j<N;++j)
+            {
+                B[i][j] = B[i][j]/sum;
+            }
+        }
+
+        //q
+        double sum = 0;
+        for(int j=0;j<N;++j)
+        {
+            double r = (rand()%100)+1;
+            sum+=r;
+            q[j] = r;
+        }
+        for(int j=0;j<N;++j)
+        {
+            q[j] = q[j]/sum;
+        }
+    }
+
+    void scale()
+    {
+        double sum = 0;
+        for(int i=0;i<N;++i)
+            sum += q[i];
+        for(int i=0;i<N;++i)
+            q[i] = q[i]/sum;
     }
 
     void reset()
     {
-        converged = true;
         //A
         for(int i=0;i<N;++i)
         {
@@ -92,6 +154,63 @@ struct HMM {
         }
     }
 
+    double probability(std::vector<int> seq)
+    {
+        /*
+        std::cerr << "seq: ";
+        for(int i=0;i<(int)seq.size();++i)
+            std::cerr << seq[i] << " ";
+        std::cerr << std::endl;
+        */
+        int T = seq.size();
+        for(int i=0;i<(int)seq.size();++i)
+            if(seq[i] == -1)
+            {
+                T = i;
+                break;
+            }
+        //std::cerr << "probability, T= " << T << std::endl;
+
+        //typ HMM2
+        double alpha[T][N];
+
+        for(int i=0;i<N;++i)
+        {
+            //double temp = (1./N)*B[i][seq[0]];
+            double temp = 1000.*B[i][seq[0]];
+            if (std::isnan(temp))
+            {
+                //std::cerr << "BATMAN" <<std::endl;
+                alpha[0][i] = 0;
+            }
+            else
+                alpha[0][i] = temp;
+        }
+        //std::cerr << "alpha-0" << std::endl;
+        //alpha-t
+        for(int t=1;t<T;++t)
+        {
+            for(int i=0;i<N;++i)
+            {
+                alpha[t][i] = 0;
+                for(int j=0;j<N;++j)
+                {
+                    double temp = alpha[t-1][j]*A[j][i];
+                    if(!std::isnan(temp))
+                        alpha[t][i] += temp;
+                }
+                alpha[t][i] *= B[i][seq[t]];
+                //std::cerr << B[i][seq[t]] << std::endl;
+            }
+            //std::cerr << "alpha-" << t << std::endl;
+        }
+
+        double sum = 0;
+        for(int i=0;i<N;++i)
+            sum+=alpha[T-1][i];
+        return sum;
+    }
+
     double** initialize(int rows, int cols)
     {
         double** temp;
@@ -101,102 +220,23 @@ struct HMM {
         return temp;
     }
 
-    std::vector<int> Viterbi(std::vector<int> seq)
+    std::vector<double> nextState(int lastState)
     {
-        int state;
-
-        int T = (int)seq.size();
-        for(int t=0;t<(int)seq.size();++t)
-            if(seq[t] == -1)
-            {
-                T = t;
-                break;
-            }
-
-        double maximum = -std::numeric_limits<double>::max();
-
-        double* tempArray = (double*)calloc(N,sizeof(double));
-        double* prob = (double*)calloc(N,sizeof(double));
-        int sequences[T][N];
-
-        //t=0;
-        for(int i=0;i<N;++i)
-        {
-            prob[i] = q[i]*B[i][seq[0]];
-            int index = 0;
-            if(prob[i]> maximum)
-            {
-                maximum = prob[i];
-                index = i;
-            }
-            sequences[0][i] = index;
-        }
-
-        for(int t=1;t<T;++t)
-        {
-            state = seq[t];
-            for(int i=0;i<N;++i)
-            {
-                maximum = prob[0] * A[0][i]* B[i][state];
-                int index = 0;
-                for(int k=1;k<N;++k)
-                {
-                    double te = prob[k] * A[k][i] * B[i][state];
-                    if(te > maximum)
-                    {
-                        maximum = te;
-                        index = k;
-                    }
-                }
-                //std::cerr << index <<"  "<< maximum << std::endl;
-                tempArray[i] = maximum;
-                sequences[t][i] = index;
-            }
-
-            for(int i=0;i<N;++i)
-                prob[i] = tempArray[i];
-        }
-
-        int current = 0;
-        maximum = prob[0];
-        for(int i=1;i<N;++i)
-        {
-            if(prob[i]>maximum)
-            {
-                maximum = prob[i];
-                current = i;
-            }
-        }
-
-        std::vector<int> e(T);
-        for(int t = (T-1);t>=0 ;t--)
-        {
-            e[t] = current;
-            current = sequences[t][current];
-        }
-        return e;
-    }
-
-    std::vector<double> probability(int lastState)
-    {
-        //alpha-0
-        //double c;
+        double c;
         std::vector<double> temp(N,0);
         for(int i=0;i<N;++i)
         {
 
             for(int j=0;j<N;++j)
             {
-                temp[i] += qT[j]*A[j][i];
+                temp[i] += LastAlpha[j]*A[j][i];
             }
             temp[i] *= B[i][lastState];
-
-            //temp[i] = qT[i]*B[i][lastState];
-            //c+=alpha[0][i];
+            c += temp[i];
         }
-        //c=1./c;
-        //for(int i=0;i<N;++i)
-            //alpha[0][i] *=c;
+        c = 1./c;
+        for(int i=0;i<N;++i)
+            temp[i] = temp[i]*c;
         return temp;
     }
 
@@ -210,32 +250,8 @@ struct HMM {
                 T = t;
                 break;
             }
-        //std::cerr << "seq.size():  "<< seq.size() << " T=" << T << " seq[T-1]=" << seq[T-1] <<std::endl;
-        /*
-        std::cerr << "BaumWelch \nT = " << T << std::endl;
-        std::cerr << "seq: ";
-        for(int t=0;t<T;++t)
-            std::cerr << seq[t] << " ";
-        std::cerr << std::endl;
 
-        std::cerr << "\nA"<<std::endl;
-        for(int i=0;i<N;++i)
-        {
-            for(int j=0;j<N;++j)
-                std::cerr << A[i][j] << " ";
-            std::cerr << std::endl;
-        }
-
-        std::cerr << "\nB"<<std::endl;
-        for(int i=0;i<N;++i)
-        {
-            for(int j=0;j<N;++j)
-                std::cerr << B[i][j] << " ";
-            std::cerr << std::endl;
-        }
-        */
-        int digits = 5;
-        int MaxItter = 200;
+        //int digits = 5;
         int itter = 0;
         double OldLogProb = -std::numeric_limits<double>::max();
 
@@ -339,7 +355,7 @@ struct HMM {
             for(int i=0;i<N;++i)
             {
                 q[i] = Gamma[0][i];
-                qT[i] = alpha[T-1][i];
+                LastAlpha[i] = alpha[T-1][i];
             }
 
             /*A*/
@@ -354,8 +370,8 @@ struct HMM {
                         numer += diGamma[t][i][j];
                         denom += Gamma[t][i];
                     }
-                //A[i][j] = numer/denom;
-                A[i][j] = round((numer/denom)*pow(10,digits))/pow(10,digits);
+                A[i][j] = numer/denom;
+                //A[i][j] = round((numer/denom)*pow(10,digits))/pow(10,digits);
                 //std::cerr << "A : numer=" << numer <<", denom=" << denom << std::endl;
                 }
             }
@@ -373,8 +389,8 @@ struct HMM {
                             numer += Gamma[t][i];
                         denom += Gamma[t][i];
                     }
-                //B[i][j] = numer/denom;
-                B[i][j] = round((numer/denom)*pow(10,digits))/pow(10,digits);
+                B[i][j] = numer/denom;
+                //B[i][j] = round((numer/denom)*pow(10,digits))/pow(10,digits);
                 //std::cerr << "B : numer=" << numer <<", denom=" << denom << std::endl;
                 }
             }
@@ -396,12 +412,27 @@ struct HMM {
             itter++;
         }
 
-        //std::cerr << "BaumWelch Done Itter: "<< itter << std::endl;
+        bool batman = false;
+        for(int i=0;i<N && !batman;++i)
+            for(int j=0;j<N && !batman;++j)
+                if(std::isnan(A[i][j]))
+                   batman = true;
+        for(int i=0;i<N && !batman;++i)
+            for(int j=0;j<M && !batman;++j)
+                if(std::isnan(B[i][j]))
+                   batman = true;
+        if(batman)
+            std::cerr << "NaN" << std::endl;
 
-        if (itter==MaxItter)
-            converged = false;
+
+        Converged = true;
+        if(itter == MaxItter || batman)
+            Converged = false;
+
+
+        //std::cerr << "BaumWelch Done Itter: "<< itter << std::endl;
         /*
-        if(itter >150)
+        if(itter == MaxItter || true)
         {
             std::cerr << "A" << std::endl;
             for(int i=0;i<N;++i)
@@ -435,6 +466,8 @@ public:
      * There is no data in the beginning, so not much should be done here.
      */
     Player();
+
+    ESpecies IDbird(Bird bird);
 
     /**
      * Shoot!

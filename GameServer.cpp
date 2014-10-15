@@ -254,7 +254,7 @@ void GameServer::playerShoot(SPlayer &pPlayer)
 
     // Ask the player to shoot
     Deadline lDue(mTimeForShoot);
-    *pPlayer.mOutputStream << "SHOOT " << lDue.remainingMs() << std::endl;
+    *pPlayer.mOutputStream << "SHOOT " << lDue.remainingMs() << std::endl; 
 
     if (gVerbose)
         std::cerr << "Waiting for player to shoot" << std::endl;
@@ -268,7 +268,7 @@ void GameServer::playerShoot(SPlayer &pPlayer)
     }
 
     if (gVerbose)
-        std::cerr << "Got message from player: " << lLine << std::endl;
+        std::cerr << "Got message from player: " << lLine << std::endl; 
 
     if (lDue.remainingMs() < 0)
     {
@@ -294,6 +294,7 @@ void GameServer::playerShoot(SPlayer &pPlayer)
         EMovement lTrueMovement = mBirds[lBird].getLastObservation();
         if (lMovement == lTrueMovement && lMovement != MOVE_DEAD)
         {
+			std::cerr << "                                        __KILL__" << std::endl;  //---------------------------EGEN
             // Mark the bird as dead
             mBirds[lBird].kill();
             pPlayer.mScore += 1;
@@ -315,6 +316,7 @@ void GameServer::playerShoot(SPlayer &pPlayer)
         else
         {
             pPlayer.mScore -= 1;
+			std::cerr << "                                        ---MISS---" << std::endl; //------------------------EGEN
         }
     }
 }
