@@ -15,12 +15,23 @@
 namespace ducks
 {
 
+struct data {
+    Bird bird;
+    ESpecies birdID;
+
+    data(Bird b, ESpecies id)
+    {
+        bird = b;
+        birdID = id;
+    }
+};
+
 
 struct HMM {
-    int birdID = -1;
-    int N = 9;
-    int M = 9;
-    int MaxItter = 200;
+    ESpecies birdID = SPECIES_UNKNOWN;
+    const int N = 9;
+    const int M = 9;
+    const int MaxItter = 400;
     double**A;
     double**B;
     double*q;
@@ -152,6 +163,46 @@ struct HMM {
         {
             q[j] = q[j]/sum;
         }
+    }
+
+    EMovement nextMove(EMovement lastMove)
+    {
+        double* P = (double*)calloc(N,sizeof(double));
+
+        for(int i=0;i<N;++i)
+        {
+            P[i] = 0;
+            for(int j=0;j<N;++j)
+            {
+                double temp = LastAlpha[j]*A[j][i];
+                if(!std::isnan(temp))
+                    P[i] += temp;
+            }
+            P[i] *= B[i][(int)lastMove];
+        }
+
+        double maximum = 0;
+        int index = -1;
+        for(int i=0;i<N;++i)
+            if(P[i]>maximum)
+            {
+                maximum = P[i];
+                index = i;
+            }
+        switch(index)
+        {
+            case 0: return MOVE_UP_LEFT;
+            break;case 1: return MOVE_UP;
+            break;case 2: return MOVE_UP_RIGHT;
+            break;case 3: return MOVE_LEFT;
+            break;case 4: return MOVE_STOPPED;
+            break;case 5: return MOVE_RIGHT;
+            break;case 6: return MOVE_DOWN_LEFT;
+            break;case 7: return MOVE_DOWN;
+            break;case 8: return MOVE_DOWN_RIGHT;
+            break;
+        }
+        return MOVE_DEAD;
     }
 
     double probability(std::vector<int> seq)

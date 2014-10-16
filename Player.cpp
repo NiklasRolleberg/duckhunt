@@ -1,10 +1,13 @@
 #include "Player.hpp"
 #include <cstdlib>
 #include <iostream>
+#include <queue>
 
 namespace ducks
 {
 std::vector<HMM> BirdModels;
+
+std::queue<data> Q;
 
 Player::Player()
 {
@@ -16,7 +19,7 @@ ESpecies Player::IDbird(Bird bird)
     for(int i=0;i<(int)bird.getSeqLength();++i)
         seq[i] = bird.getObservation(i);
     double probability = 0;
-    int id = -1;
+    ESpecies id = SPECIES_PIGEON;
     for(int i=0;i<(int)BirdModels.size();++i)
     {
         //std::cerr << i<< std::endl;
@@ -27,26 +30,7 @@ ESpecies Player::IDbird(Bird bird)
             id = BirdModels[i].birdID;
         }
     }
-    std::cerr << "Probability "<< probability  <<"bird " << id << std::endl;
-    switch(id)
-    {
-    case 0: return SPECIES_PIGEON;
-        break;
-    case 1: return SPECIES_RAVEN;
-        break;
-    case 2: return SPECIES_SKYLARK;
-        break;
-    case 3: return SPECIES_SWALLOW;
-        break;
-    case 4: return SPECIES_SNIPE;
-        break;
-    case 5: return SPECIES_BLACK_STORK;
-        break;
-    default:
-        std::cerr << "Default" << std::endl;
-    }
-
-    return SPECIES_PIGEON;
+    return id;
 }
 
 Action Player::shoot(const GameState &pState, const Deadline &pDue)
@@ -65,6 +49,29 @@ Action Player::shoot(const GameState &pState, const Deadline &pDue)
 
 std::vector<ESpecies> Player::guess(const GameState &pState, const Deadline &pDue)
 {
+
+    while(pDue.remainingMs()>20*BirdModels.size() +100 && !Q.empty())
+    {
+        data d = Q.front();
+        Q.pop();
+        Bird bird = d.bird;
+        std::vector<int> seq((int)bird.getSeqLength());
+        for(int i=0;i<(int)bird.getSeqLength();++i)
+            seq[i] = bird.getObservation(i);
+        HMM model;
+        model.reset();
+        model.BaumWelch(seq);
+        model.birdID = d.birdID;
+        if(model.Converged)
+        {
+            std::cerr << "old model Converged, Bird: " << d.birdID << std::endl;
+            BirdModels.push_back(model);
+        }
+        else
+            std::cerr << "old model Not converged, Bird:" << d.birdID << std::endl;
+    }
+
+
     std::cerr << "Guess" << std::endl;
     ESpecies sp = SPECIES_UNKNOWN;
     if(pState.getRound()<2)
@@ -82,7 +89,7 @@ std::vector<ESpecies> Player::guess(const GameState &pState, const Deadline &pDu
     std::cerr << "Guesses: ";
     for(int i=0;i<(int)pState.getNumBirds();++i)
         std::cerr << lGuesses[i] << " ";
-    std::cerr << std::endl;
+    std::cerr << " Time left: " << pDue.remainingMs() << std::endl;
 
     return lGuesses;
 }
@@ -102,7 +109,8 @@ void Player::reveal(const GameState &pState, const std::vector<ESpecies> &pSpeci
         std::cerr << pSpecies[i] << " ";
     std::cerr << std::endl;
 
-    for(int b=0;b<(int)pState.getNumBirds() && pDue.remainingMs() > 300;++b)
+    int last=0;
+    for(int b=0;b<(int)pState.getNumBirds() && pDue.remainingMs() > 400;++b)
     {
         Bird bird = pState.getBird(b);
         std::vector<int> seq((int)bird.getSeqLength());
@@ -119,9 +127,15 @@ void Player::reveal(const GameState &pState, const std::vector<ESpecies> &pSpeci
         }
         else
             std::cerr << "Not converged, Bird:" << pSpecies[b] << std::endl;
+        last = b;
     }
-    std::cerr << "BirdModels: " << BirdModels.size() << " Time left: "<< pDue.remainingMs() << std::endl;
+    if(last<(int) pState.getNumBirds())
+    {
+        for(int i=last;i<(int)pState.getNumBirds();++i)
+        {
+            Q.push(data(pState.getBird(i),pSpecies[i]));
+        }
+    }
+    std::cerr << "Time remaining: " << pDue.remainingMs() << " BirdModels: " << BirdModels.size() << " in Queue: " << Q.size() << std::endl;
 }
-
-
 } /*namespace ducks*/
