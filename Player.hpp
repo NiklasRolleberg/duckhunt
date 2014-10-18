@@ -31,7 +31,7 @@ struct HMM {
     ESpecies birdID = SPECIES_UNKNOWN;
     const int N = 9;
     const int M = 9;
-    const int MaxItter = 400;
+    //int MaxItter = 400;
     double**A;
     double**B;
     double*q;
@@ -165,30 +165,65 @@ struct HMM {
         }
     }
 
-    EMovement nextMove(EMovement lastMove)
+    EMovement nextMove(Bird b)
     {
-        double* P = (double*)calloc(N,sizeof(double));
+        /**----------Alpha-pass------------------------*/
+        if(b.isDead())
+            return MOVE_DEAD;
+
+        int T = b.getSeqLength()+1;
+
+        double c[T];
+        double alpha[T][N];
+
+        c[0] = 0;
 
         for(int i=0;i<N;++i)
         {
-            P[i] = 0;
-            for(int j=0;j<N;++j)
-            {
-                double temp = LastAlpha[j]*A[j][i];
-                if(!std::isnan(temp))
-                    P[i] += temp;
-            }
-            P[i] *= B[i][(int)lastMove];
+            alpha[0][i] = q[i]*B[i][b.getObservation(0)];
+            c[0] += alpha[0][i];
+        }
+        //scale
+        c[0] = 1.0/c[0];
+        for(int i=0;i<N;++i)
+        {
+            alpha[0][i] *= c[0];
         }
 
-        double maximum = 0;
-        int index = -1;
-        for(int i=0;i<N;++i)
-            if(P[i]>maximum)
+        //alpha-t
+        for(int t=1;t<T;++t)
+        {
+            c[t] = 0;
+            for(int i=0;i<N;++i)
             {
-                maximum = P[i];
+                alpha[t][i] = 0;
+                for(int j=0;j<N;++j)
+                {
+                    alpha[t][i] += alpha[t-1][j]*A[j][i];
+                }
+                alpha[t][i] *= B[i][b.getObservation(t)];
+                c[t] += alpha[t][i];
+            }
+
+            //scale
+            c[t] = 1.0/c[t];
+            for(int i=0;i<N;++i)
+            {
+                alpha[t][i] *= c[t];
+            }
+        }
+
+        double prob = 0;
+        int index = 0;
+        for(int i=0;i<N;++i)
+        {
+            if(alpha[T-1][i] > prob)
+            {
+                prob = alpha[T-1][i];
                 index = i;
             }
+        }
+
         switch(index)
         {
             case 0: return MOVE_UP_LEFT;
@@ -202,10 +237,11 @@ struct HMM {
             break;case 8: return MOVE_DOWN_RIGHT;
             break;
         }
+        std::cerr << "Fel i nextMove" << std::endl;
         return MOVE_DEAD;
     }
 
-    double probability(std::vector<int> seq)
+    double probability(Bird b)
     {
         /*
         std::cerr << "seq: ";
@@ -213,13 +249,16 @@ struct HMM {
             std::cerr << seq[i] << " ";
         std::cerr << std::endl;
         */
-        int T = seq.size();
-        for(int i=0;i<(int)seq.size();++i)
-            if(seq[i] == -1)
-            {
-                T = i;
-                break;
-            }
+        int T = b.getSeqLength();
+        if(b.isDead())
+        {
+            for(int i=0;i<(int)b.getSeqLength();++i)
+                if(b.getObservation(i) == -1)
+                {
+                    T = i;
+                    break;
+                }
+        }
         //std::cerr << "probability, T= " << T << std::endl;
 
         //typ HMM2
@@ -228,7 +267,7 @@ struct HMM {
         for(int i=0;i<N;++i)
         {
             //double temp = (1./N)*B[i][seq[0]];
-            double temp = 1000.*B[i][seq[0]];
+            double temp = 1000.*B[i][b.getObservation(0)];
             if (std::isnan(temp))
             {
                 //std::cerr << "BATMAN" <<std::endl;
@@ -250,7 +289,7 @@ struct HMM {
                     if(!std::isnan(temp))
                         alpha[t][i] += temp;
                 }
-                alpha[t][i] *= B[i][seq[t]];
+                alpha[t][i] *= B[i][b.getObservation(t)];
                 //std::cerr << B[i][seq[t]] << std::endl;
             }
             //std::cerr << "alpha-" << t << std::endl;
@@ -271,36 +310,17 @@ struct HMM {
         return temp;
     }
 
-    std::vector<double> nextState(int lastState)
-    {
-        double c;
-        std::vector<double> temp(N,0);
-        for(int i=0;i<N;++i)
-        {
-
-            for(int j=0;j<N;++j)
-            {
-                temp[i] += LastAlpha[j]*A[j][i];
-            }
-            temp[i] *= B[i][lastState];
-            c += temp[i];
-        }
-        c = 1./c;
-        for(int i=0;i<N;++i)
-            temp[i] = temp[i]*c;
-        return temp;
-    }
-
-    void BaumWelch(std::vector<int> seq)
+    void BaumWelch(Bird b,int MaxItter)
     {
         //std::cerr << "BAUM" << std::endl;
-        int T = (int)seq.size();
-        for(int t=0;t<(int)seq.size();++t)
-            if(seq[t] == -1)
-            {
-                T = t;
-                break;
-            }
+        int T = b.getSeqLength();
+        if(b.isDead())
+            for(int t=0;t<(int)b.getSeqLength();++t)
+                if(b.getObservation(t) == -1)
+                {
+                    T = t;
+                    break;
+                }
 
         //int digits = 5;
         int itter = 0;
@@ -326,7 +346,7 @@ struct HMM {
 
             for(int i=0;i<N;++i)
             {
-                alpha[0][i] = q[i]*B[i][seq[0]];
+                alpha[0][i] = q[i]*B[i][b.getObservation(0)];
                 c[0] += alpha[0][i];
             }
             //scale
@@ -347,7 +367,7 @@ struct HMM {
                     {
                         alpha[t][i] += alpha[t-1][j]*A[j][i];
                     }
-                    alpha[t][i] *= B[i][seq[t]];
+                    alpha[t][i] *= B[i][b.getObservation(t)];
                     c[t] += alpha[t][i];
                 }
 
@@ -372,7 +392,7 @@ struct HMM {
                     beta[t][i] = 0;
                     for(int j=0;j<N;++j)
                     {
-                        beta[t][i] += A[i][j] * B[j][seq[t+1]] * beta[t+1][j];
+                        beta[t][i] += A[i][j] * B[j][b.getObservation(t+1)] * beta[t+1][j];
                     }
                     //scale
                     beta[t][i] *= c[t];
@@ -387,14 +407,14 @@ struct HMM {
                 double denom = 0;
                 for(int i=0;i<N;++i)
                     for(int j=0;j<N;++j)
-                        denom += alpha[t][i] * A[i][j] * B[j][seq[t+1]] * beta[t+1][j];
+                        denom += alpha[t][i] * A[i][j] * B[j][b.getObservation(t+1)] * beta[t+1][j];
 
                 for(int i=0;i<N;++i)
                 {
                     Gamma[t][i] = 0;
                     for(int j=0;j<N;++j)
                     {
-                        diGamma[t][i][j] = (alpha[t][i] * A[i][j] * B[j][seq[t+1]] * beta[t+1][j]) / denom;
+                        diGamma[t][i][j] = (alpha[t][i] * A[i][j] * B[j][b.getObservation(t+1)] * beta[t+1][j]) / denom;
                         Gamma[t][i] += diGamma[t][i][j];
                     }
                 }
@@ -436,7 +456,7 @@ struct HMM {
                     double denom = 0;
                     for(int t=0;t<(T-1);++t)
                     {
-                        if(seq[t] == j)
+                        if(b.getObservation(t) == j)
                             numer += Gamma[t][i];
                         denom += Gamma[t][i];
                     }
@@ -477,7 +497,7 @@ struct HMM {
 
 
         Converged = true;
-        if(itter == MaxItter || batman)
+        if(batman)//itter == MaxItter || batman)
             Converged = false;
 
 

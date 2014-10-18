@@ -15,18 +15,15 @@ Player::Player()
 
 ESpecies Player::IDbird(Bird bird)
 {
-    std::vector<int> seq((int)bird.getSeqLength());
-    for(int i=0;i<(int)bird.getSeqLength();++i)
-        seq[i] = bird.getObservation(i);
-    double probability = 0;
-    ESpecies id = SPECIES_PIGEON;
+    double prob = 0;
+    ESpecies id = SPECIES_UNKNOWN;
     for(int i=0;i<(int)BirdModels.size();++i)
     {
         //std::cerr << i<< std::endl;
-        double p = BirdModels[i].probability(seq);
-        if(p>probability)
+        double p = BirdModels[i].probability(bird);
+        if(p>prob)
         {
-            probability = p;
+            prob = p;
             id = BirdModels[i].birdID;
         }
     }
@@ -35,11 +32,48 @@ ESpecies Player::IDbird(Bird bird)
 
 Action Player::shoot(const GameState &pState, const Deadline &pDue)
 {
+
+    //if(pState.getRound()<2 && pState.getBird(0).getSeqLength() < 40)
+        return cDontShoot;
+
     /*
     * Here you should write your clever algorithms to get the best action.
     * This skeleton never shoots.
     */
 
+    //HMM hmm;
+    //hmm.reset();
+
+    int i=0;
+    double p = 0;
+    EMovement next = MOVE_STOPPED;
+    ESpecies sp = SPECIES_UNKNOWN;
+
+    while((i<(int)pState.getNumBirds()) && (pDue.remainingMs() > 100))
+    {
+        Bird bird = pState.getBird(i);
+        //std::cerr << "GetBird" << std::endl;
+        if(bird.isAlive())
+        {
+            ESpecies tempSP = IDbird(bird);
+            for(int j=0;j<(int)BirdModels.size();++j)
+            {
+                double temp = BirdModels[j].probability(bird);
+                //std::cerr << temp << std::endl;
+                if(temp > p)
+                {
+                    p=temp;
+                    next = BirdModels[j].nextMove(bird);
+                    std::cerr << next << std::endl;
+                    sp = tempSP;
+                }
+            }
+        }
+        ++i;
+    }
+    std::cerr << "next" << std::endl;
+    if(next != MOVE_DEAD)
+        return Action(sp, next);
     return cDontShoot;
 
     //This line would predict that bird 0 will move right and shoot at it
@@ -50,17 +84,13 @@ Action Player::shoot(const GameState &pState, const Deadline &pDue)
 std::vector<ESpecies> Player::guess(const GameState &pState, const Deadline &pDue)
 {
 
-    while(pDue.remainingMs()>20*BirdModels.size() +100 && !Q.empty())
+    while(pDue.remainingMs()>10*BirdModels.size() +100 && !Q.empty())
     {
         data d = Q.front();
         Q.pop();
-        Bird bird = d.bird;
-        std::vector<int> seq((int)bird.getSeqLength());
-        for(int i=0;i<(int)bird.getSeqLength();++i)
-            seq[i] = bird.getObservation(i);
         HMM model;
         model.reset();
-        model.BaumWelch(seq);
+        model.BaumWelch(d.bird,600);
         model.birdID = d.birdID;
         if(model.Converged)
         {
@@ -72,14 +102,14 @@ std::vector<ESpecies> Player::guess(const GameState &pState, const Deadline &pDu
     }
 
 
-    std::cerr << "Guess" << std::endl;
-    ESpecies sp = SPECIES_UNKNOWN;
-    if(pState.getRound()<2)
-        sp = SPECIES_PIGEON;
+    std::cerr << "Guess  Round " << pState.getRound() << std::endl;
+    ESpecies sp = SPECIES_PIGEON;
+    if(pState.getRound()>1  )
+        sp = SPECIES_UNKNOWN;
 
     std::vector<ESpecies> lGuesses(pState.getNumBirds(),sp);//SPECIES_UNKNOWN);
 
-    for(int bird=0;bird<(int)pState.getNumBirds();++bird)
+    for(int bird=0;bird<(int)pState.getNumBirds() && pState.getRound()>1 ;++bird)
     {
         //Guess the species of birds by looking at old HMM models
         Bird cBird = pState.getBird(bird);
@@ -112,28 +142,29 @@ void Player::reveal(const GameState &pState, const std::vector<ESpecies> &pSpeci
     int last=0;
     for(int b=0;b<(int)pState.getNumBirds() && pDue.remainingMs() > 400;++b)
     {
-        Bird bird = pState.getBird(b);
-        std::vector<int> seq((int)bird.getSeqLength());
-        for(int i=0;i<(int)bird.getSeqLength();++i)
-            seq[i] = bird.getObservation(i);
-        HMM model;
-        model.reset();
-        model.BaumWelch(seq);
-        model.birdID = pSpecies[b];
-        if(model.Converged)
+        if(pSpecies[b] != -1)
         {
-            //std::cerr << "Converged" << std::endl;
-            BirdModels.push_back(model);
+            Bird bird = pState.getBird(b);
+            HMM model;
+            model.reset();
+            model.birdID = pSpecies[b];
+            model.BaumWelch(bird,300);
+            if(model.Converged)
+            {
+                //std::cerr << "Converged" << std::endl;
+                BirdModels.push_back(model);
+            }
+            else
+                std::cerr << "Not converged, Bird:" << pSpecies[b] << std::endl;
+            last = b;
         }
-        else
-            std::cerr << "Not converged, Bird:" << pSpecies[b] << std::endl;
-        last = b;
     }
     if(last<(int) pState.getNumBirds())
     {
         for(int i=last;i<(int)pState.getNumBirds();++i)
         {
-            Q.push(data(pState.getBird(i),pSpecies[i]));
+            if(pSpecies[i] != -1)
+                Q.push(data(pState.getBird(i),pSpecies[i]));
         }
     }
     std::cerr << "Time remaining: " << pDue.remainingMs() << " BirdModels: " << BirdModels.size() << " in Queue: " << Q.size() << std::endl;
