@@ -167,7 +167,9 @@ struct HMM {
 
     EMovement nextMove(Bird b)
     {
+
         /**----------Alpha-pass------------------------*/
+        /*
         if(b.isDead())
             return MOVE_DEAD;
 
@@ -223,6 +225,45 @@ struct HMM {
                 index = i;
             }
         }
+        */
+
+
+        int m = b.getLastObservation();
+
+        //max in A
+        double maximum = 0;
+        int index = -1;
+
+        for(int i=0;i<N;++i)
+        {
+            if(A[i][m] > maximum)
+            {
+                maximum = A[i][m];
+                index = i;
+            }
+        }
+        if(index == -1)
+            return MOVE_DEAD;
+
+        //std::cerr << "maximum " << maximum << std::endl;
+
+        maximum = 0;
+        m = index;
+        index = -1;
+        for(int i=0;i<M;++i)
+        {
+            if(B[i][m] > maximum)
+            {
+                maximum = B[m][i];
+                index = i;
+            }
+        }
+
+        //std::cerr << "max: " << maximum << std::endl;
+
+        if(index == -1 || maximum < 0.8)
+            return MOVE_DEAD;
+
 
         switch(index)
         {
@@ -236,6 +277,7 @@ struct HMM {
             break;case 7: return MOVE_DOWN;
             break;case 8: return MOVE_DOWN_RIGHT;
             break;
+            default: return MOVE_DEAD;
         }
         std::cerr << "Fel i nextMove" << std::endl;
         return MOVE_DEAD;
