@@ -48,7 +48,7 @@ Action Player::shoot(const GameState &pState, const Deadline &pDue)
     * This skeleton never shoots.
     */
 
-    for(int b=0;b<pState.getNumBirds() && pDue.remainingMs() > 500;++b)
+    for(int b=0;b<(int)pState.getNumBirds() && pDue.remainingMs() > 500;++b)
     {
         Bird bird = pState.getBird(b);
         if(bird.isAlive())
@@ -73,7 +73,7 @@ Action Player::shoot(const GameState &pState, const Deadline &pDue)
             }
         }
     }
-
+    std::cerr << "dontShoot" << std::endl;
     return cDontShoot;
 
     //This line would predict that bird 0 will move right and shoot at it
@@ -114,7 +114,7 @@ std::vector<ESpecies> Player::guess(const GameState &pState, const Deadline &pDu
         //Guess the species of birds by looking at old HMM models
         Bird cBird = pState.getBird(bird);
         ESpecies esp = IDbird(cBird);
-        if(esp == SPECIES_UNKNOWN && pState.getRound() < 2)
+        if(esp == SPECIES_UNKNOWN )//&& pState.getRound() < 2)
             esp = SPECIES_PIGEON;
         lGuesses[bird]=esp;
     }

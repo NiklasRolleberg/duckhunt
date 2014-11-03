@@ -35,8 +35,9 @@ struct HMM {
     double**A;
     double**B;
     double*q;
-    double*LastAlpha;
+
     bool Converged = false;
+    int tTrain = 0;
 
     HMM()
     {
@@ -51,8 +52,6 @@ struct HMM {
             B[i] = (double*)calloc(M,sizeof(double));
         //q
         q = (double*)calloc(N,sizeof(double));
-        //The last alpha
-        LastAlpha = (double*)calloc(N,sizeof(double));
 
         //A
         for(int i=0;i<N;++i)
@@ -167,17 +166,121 @@ struct HMM {
 
     EMovement nextMove(Bird b)
     {
+        //find most probable hidden state
+        int T = b.getSeqLength();
+        int currState = 0;
+        float maxGamma = 0;
+        float denom = 0;
 
-        /**----------Alpha-pass------------------------*/
-        /*
-        if(b.isDead())
+        double**alpha = initialize(T,N);
+        double**beta = initialize(T,N);
+        double* c = (double*)calloc(N,sizeof(double));
+        double maximum = 0;
+
+        alphaPass(alpha,c,T,b,true);
+        betaPass(beta,c,T,b,true);
+
+
+        for(int j = 0; j < N; ++ j)
+        {
+            denom += alpha[T - 1][j];
+        }
+
+        for(int i = 0; i < N; ++ i)
+        {
+            float res = alpha[T-1][i] * beta[T-1][i] / denom;
+            if(res > maxGamma)
+            {
+                maxGamma = res;
+                currState = i;
+            }
+        }
+
+        //find the observation for that state
+        int index = -1;
+
+        std::cout << "currentState: " << currState << std::endl;
+
+        for(int t = 0; t < M; ++t)
+        {
+            if(B[currState][t] > maximum)
+            {
+                maximum = B[currState][t];
+                index = t;
+            }
+        }
+
+        std::cerr << "max: " << maximum << std::endl;
+
+        if(index == -1 || maximum < 0.95)
             return MOVE_DEAD;
 
-        int T = b.getSeqLength()+1;
 
-        double c[T];
-        double alpha[T][N];
+        switch(index)
+        {
+            case 0: return MOVE_UP_LEFT;
+            break;case 1: return MOVE_UP;
+            break;case 2: return MOVE_UP_RIGHT;
+            break;case 3: return MOVE_LEFT;
+            break;case 4: return MOVE_STOPPED;
+            break;case 5: return MOVE_RIGHT;
+            break;case 6: return MOVE_DOWN_LEFT;
+            break;case 7: return MOVE_DOWN;
+            break;case 8: return MOVE_DOWN_RIGHT;
+            break;
+            default: return MOVE_DEAD;
+        }
+        std::cerr << "Fel i nextMove" << std::endl;
+        return MOVE_DEAD;
+    }
 
+    double probability(Bird b)
+    {
+        int T = b.getSeqLength()-1;
+        if(b.isDead())
+        {
+            for(int i=0;i<(int)b.getSeqLength();++i)
+                if(b.getObservation(i) == -1)
+                {
+                    T = i;
+                    break;
+                }
+        }
+
+        //if(T>tTrain)
+            //T = tTrain;
+
+        std::cerr << "T= " << T << std::endl;
+
+        double** alpha = initialize(T,N);
+        double* c = (double*)calloc(N,sizeof(double));
+
+        double sum = 0;
+        alphaPass(alpha,c,T,b,true);
+
+        for(int i = 0; i < N; ++ i)
+        {
+            std::cerr << i << " ";
+            sum += (alpha[T-1][i]);
+        }
+        std::cerr << std::endl;
+        return sum;
+    }
+
+    double** initialize(int rows, int cols)
+    {
+        double** temp;
+        temp = (double**)calloc(rows , sizeof(double *));
+        for(int i=0 ; i< rows ; ++i)
+            temp[i] = (double*)calloc(cols , sizeof(double));
+        return temp;
+    }
+
+    void alphaPass(double** alpha, double* c, int T, Bird &b, bool sc)
+    {
+        /**----------Alpha-pass------------------------*/
+        //std::cerr << "alpha-pass" << std::endl;
+        //alpha-0
         c[0] = 0;
 
         for(int i=0;i<N;++i)
@@ -208,148 +311,40 @@ struct HMM {
             }
 
             //scale
-            c[t] = 1.0/c[t];
-            for(int i=0;i<N;++i)
+            if(sc)
             {
-                alpha[t][i] *= c[t];
+                c[t] = 1.0/c[t];
+                for(int i=0;i<N;++i)
+                {
+                    alpha[t][i] *= c[t];
+                }
             }
         }
 
-        double prob = 0;
-        int index = 0;
-        for(int i=0;i<N;++i)
-        {
-            if(alpha[T-1][i] > prob)
-            {
-                prob = alpha[T-1][i];
-                index = i;
-            }
-        }
-        */
-
-
-        int m = b.getLastObservation();
-
-        //max in A
-        double maximum = 0;
-        int index = -1;
-
-        for(int i=0;i<N;++i)
-        {
-            if(A[i][m] > maximum)
-            {
-                maximum = A[i][m];
-                index = i;
-            }
-        }
-        if(index == -1)
-            return MOVE_DEAD;
-
-        //std::cerr << "maximum " << maximum << std::endl;
-
-        maximum = 0;
-        m = index;
-        index = -1;
-        for(int i=0;i<M;++i)
-        {
-            if(B[i][m] > maximum)
-            {
-                maximum = B[m][i];
-                index = i;
-            }
-        }
-
-        //std::cerr << "max: " << maximum << std::endl;
-
-        if(index == -1 || maximum < 0.8)
-            return MOVE_DEAD;
-
-
-        switch(index)
-        {
-            case 0: return MOVE_UP_LEFT;
-            break;case 1: return MOVE_UP;
-            break;case 2: return MOVE_UP_RIGHT;
-            break;case 3: return MOVE_LEFT;
-            break;case 4: return MOVE_STOPPED;
-            break;case 5: return MOVE_RIGHT;
-            break;case 6: return MOVE_DOWN_LEFT;
-            break;case 7: return MOVE_DOWN;
-            break;case 8: return MOVE_DOWN_RIGHT;
-            break;
-            default: return MOVE_DEAD;
-        }
-        std::cerr << "Fel i nextMove" << std::endl;
-        return MOVE_DEAD;
     }
 
-    double probability(Bird b)
+    void betaPass(double** beta,double* c,int T, Bird &b, bool scale)
     {
-        /*
-        std::cerr << "seq: ";
-        for(int i=0;i<(int)seq.size();++i)
-            std::cerr << seq[i] << " ";
-        std::cerr << std::endl;
-        */
-        int T = b.getSeqLength();
-        if(b.isDead())
-        {
-            for(int i=0;i<(int)b.getSeqLength();++i)
-                if(b.getObservation(i) == -1)
-                {
-                    T = i;
-                    break;
-                }
-        }
-        //std::cerr << "probability, T= " << T << std::endl;
-
-        //typ HMM2
-        double alpha[T][N];
-
+        /**----------Beta-pass------------------------*/
+        //std::cerr << "Beta-pass" << std::endl;
+        //beta T-1
         for(int i=0;i<N;++i)
-        {
-            //double temp = (1./N)*B[i][seq[0]];
-            double temp = 1000.*B[i][b.getObservation(0)];
-            if (std::isnan(temp))
-            {
-                //std::cerr << "BATMAN" <<std::endl;
-                alpha[0][i] = 0;
-            }
-            else
-                alpha[0][i] = temp;
-        }
-        //std::cerr << "alpha-0" << std::endl;
-        //alpha-t
-        for(int t=1;t<T;++t)
+            beta[T-1][i] = c[T-1];
+
+        for(int t=T-2; t>=0;--t)
         {
             for(int i=0;i<N;++i)
             {
-                alpha[t][i] = 0;
+                beta[t][i] = 0;
                 for(int j=0;j<N;++j)
                 {
-                    double temp = alpha[t-1][j]*A[j][i];
-                    if(!std::isnan(temp))
-                        alpha[t][i] += temp;
+                    beta[t][i] += A[i][j] * B[j][b.getObservation(t+1)] * beta[t+1][j];
                 }
-                alpha[t][i] *= B[i][b.getObservation(t)];
-                //std::cerr << B[i][seq[t]] << std::endl;
+                //scale
+                if(scale)
+                    beta[t][i] *= c[t];
             }
-            //std::cerr << "alpha-" << t << std::endl;
         }
-
-        double sum = 0;
-        for(int i=0;i<N;++i)
-            sum+=alpha[T-1][i];
-        return sum;
-    }
-
-    double** initialize(int rows, int cols)
-    {
-        double** temp;
-        temp = (double**)calloc(rows , sizeof(double *));
-        for(int i=0 ; i< rows ; ++i)
-            temp[i] = (double*)calloc(cols , sizeof(double));
-        return temp;
     }
 
     void BaumWelch(Bird b,int MaxItter)
@@ -364,7 +359,7 @@ struct HMM {
                     break;
                 }
 
-        //int digits = 5;
+        tTrain = T;
         int itter = 0;
         double OldLogProb = -std::numeric_limits<double>::max();
 
@@ -381,66 +376,8 @@ struct HMM {
         while((itter < MaxItter) && GO)
         {
 
-            /**----------Alpha-pass------------------------*/
-            //std::cerr << "alpha-pass" << std::endl;
-            //alpha-0
-            c[0] = 0;
-
-            for(int i=0;i<N;++i)
-            {
-                alpha[0][i] = q[i]*B[i][b.getObservation(0)];
-                c[0] += alpha[0][i];
-            }
-            //scale
-            c[0] = 1.0/c[0];
-            for(int i=0;i<N;++i)
-            {
-                alpha[0][i] *= c[0];
-            }
-
-            //alpha-t
-            for(int t=1;t<T;++t)
-            {
-                c[t] = 0;
-                for(int i=0;i<N;++i)
-                {
-                    alpha[t][i] = 0;
-                    for(int j=0;j<N;++j)
-                    {
-                        alpha[t][i] += alpha[t-1][j]*A[j][i];
-                    }
-                    alpha[t][i] *= B[i][b.getObservation(t)];
-                    c[t] += alpha[t][i];
-                }
-
-                //scale
-                c[t] = 1.0/c[t];
-                for(int i=0;i<N;++i)
-                {
-                    alpha[t][i] *= c[t];
-                }
-            }
-
-            /**----------Beta-pass------------------------*/
-            //std::cerr << "Beta-pass" << std::endl;
-            //beta T-1
-            for(int i=0;i<N;++i)
-                beta[T-1][i] = c[T-1];
-
-            for(int t=T-2; t>=0;--t)
-            {
-                for(int i=0;i<N;++i)
-                {
-                    beta[t][i] = 0;
-                    for(int j=0;j<N;++j)
-                    {
-                        beta[t][i] += A[i][j] * B[j][b.getObservation(t+1)] * beta[t+1][j];
-                    }
-                    //scale
-                    beta[t][i] *= c[t];
-                }
-            }
-
+            alphaPass(alpha,c,T,b,true);
+            betaPass(beta,c,T,b,true);
 
             /**----------diGamma & Gamma----------------*/
             //std::cerr << "diGamma&Gamma" << std::endl;
@@ -468,7 +405,6 @@ struct HMM {
             for(int i=0;i<N;++i)
             {
                 q[i] = Gamma[0][i];
-                LastAlpha[i] = alpha[T-1][i];
             }
 
             /*A*/
@@ -484,8 +420,6 @@ struct HMM {
                         denom += Gamma[t][i];
                     }
                 A[i][j] = numer/denom;
-                //A[i][j] = round((numer/denom)*pow(10,digits))/pow(10,digits);
-                //std::cerr << "A : numer=" << numer <<", denom=" << denom << std::endl;
                 }
             }
 
@@ -503,8 +437,6 @@ struct HMM {
                         denom += Gamma[t][i];
                     }
                 B[i][j] = numer/denom;
-                //B[i][j] = round((numer/denom)*pow(10,digits))/pow(10,digits);
-                //std::cerr << "B : numer=" << numer <<", denom=" << denom << std::endl;
                 }
             }
 
@@ -513,12 +445,9 @@ struct HMM {
                 logProb += log(c[t]);
             logProb *= -1;
 
-            //std::cerr << "\nlogProb: " << logProb  << "\nOldLogProb: " << OldLogProb <<std::endl;
-
             if(logProb <= OldLogProb)
             {
                 GO = false;
-                //std::cerr << "Convergerad!, itterationer: "<< itter << std::endl;
             }
 
             OldLogProb = logProb;
@@ -539,7 +468,7 @@ struct HMM {
 
 
         Converged = true;
-        if(batman)//itter == MaxItter || batman)
+        if(itter == MaxItter || batman)
             Converged = false;
 
 
