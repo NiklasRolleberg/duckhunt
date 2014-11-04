@@ -19,20 +19,23 @@ Player::Player()
 
 ESpecies Player::IDbird(Bird bird)
 {
+    //std::cerr << "IDBIRD , models: " << BirdModels.size() << std::endl;
     double prob = 0;
     ESpecies id = SPECIES_UNKNOWN;
     for(int i=0;i<(int)BirdModels.size();++i)
     {
         //std::cerr << i<< std::endl;
         double p = BirdModels[i].probability(bird);
+        //std::cerr << "prob done" <<std::endl;
         if(p>prob)
         {
             prob = p;
             id = BirdModels[i].birdID;
         }
     }
-    //std::cerr << "ID: " << prob << std::endl;
-    //if(prob < 1e-200)
+    //std::cerr << "done" << std::endl;
+    std::cerr << "ID: " << prob << std::endl;
+    //if(prob < 1e-100)
         //return SPECIES_UNKNOWN;
     return id;
 }
@@ -42,6 +45,10 @@ Action Player::shoot(const GameState &pState, const Deadline &pDue)
 
     //if(pState.getRound()<2 && pState.getBird(0).getSeqLength() < 40)
         return cDontShoot;
+
+    if(pState.getBird(0).getSeqLength() <40)
+        return cDontShoot;
+
 
     /*
     * Here you should write your clever algorithms to get the best action.
@@ -61,7 +68,7 @@ Action Player::shoot(const GameState &pState, const Deadline &pDue)
                 temp.BaumWelch(bird,100);
                 if(temp.Converged)
                 {
-                    std::cerr << "Shoot converged" << std::endl;
+                    //std::cerr << "Shoot converged" << std::endl;
                     EMovement next = temp.nextMove(bird);
                     if(next != MOVE_DEAD)
                     {
@@ -114,7 +121,7 @@ std::vector<ESpecies> Player::guess(const GameState &pState, const Deadline &pDu
         //Guess the species of birds by looking at old HMM models
         Bird cBird = pState.getBird(bird);
         ESpecies esp = IDbird(cBird);
-        if(esp == SPECIES_UNKNOWN )//&& pState.getRound() < 2)
+        if(esp == SPECIES_UNKNOWN && pState.getRound() < 3)
             esp = SPECIES_PIGEON;
         lGuesses[bird]=esp;
     }

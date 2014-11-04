@@ -166,6 +166,7 @@ struct HMM {
 
     EMovement nextMove(Bird b)
     {
+        std::cerr << "NextMove" << std::endl;
         //find most probable hidden state
         int T = b.getSeqLength();
         int currState = 0;
@@ -174,7 +175,7 @@ struct HMM {
 
         double**alpha = initialize(T,N);
         double**beta = initialize(T,N);
-        double* c = (double*)calloc(N,sizeof(double));
+        double* c = (double*)calloc(T,sizeof(double));
         double maximum = 0;
 
         alphaPass(alpha,c,T,b,true);
@@ -199,22 +200,23 @@ struct HMM {
         //find the observation for that state
         int index = -1;
 
-        std::cout << "currentState: " << currState << std::endl;
+        //std::cerr << "currentState: " << currState << std::endl;
 
-        for(int t = 0; t < M; ++t)
+        for(int i = 0; i < N; ++i)
         {
-            if(B[currState][t] > maximum)
+            if(B[currState][i] > maximum)
             {
-                maximum = B[currState][t];
-                index = t;
+                maximum = B[currState][i];
+                index = i;
             }
         }
 
-        std::cerr << "max: " << maximum << std::endl;
+        //std::cerr << "max: " << maximum << std::endl;
 
         if(index == -1 || maximum < 0.95)
             return MOVE_DEAD;
 
+        std::cerr << "\tshoot: probability= " << maximum << std::endl;
 
         switch(index)
         {
@@ -247,23 +249,24 @@ struct HMM {
                 }
         }
 
-        //if(T>tTrain)
-            //T = tTrain;
+        if(T>tTrain)
+            T = tTrain;
 
-        std::cerr << "T= " << T << std::endl;
+        //std::cerr << "Probability T= " << T << " N " << N << std::endl;
+        for(int i=0;i<N;++i)
+            q[i] = 1.;
 
         double** alpha = initialize(T,N);
-        double* c = (double*)calloc(N,sizeof(double));
+        double* c = (double*)calloc(T,sizeof(double));
+
+        alphaPass(alpha,c,T,b,false);
 
         double sum = 0;
-        alphaPass(alpha,c,T,b,true);
-
         for(int i = 0; i < N; ++ i)
         {
-            std::cerr << i << " ";
             sum += (alpha[T-1][i]);
         }
-        std::cerr << std::endl;
+        //std::cerr << "Probability done" << std::endl;
         return sum;
     }
 
