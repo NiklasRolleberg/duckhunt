@@ -107,15 +107,6 @@ struct HMM {
         }
     }
 
-    void scale()
-    {
-        double sum = 0;
-        for(int i=0;i<N;++i)
-            sum += q[i];
-        for(int i=0;i<N;++i)
-            q[i] = q[i]/sum;
-    }
-
     void reset()
     {
         //A
@@ -206,7 +197,7 @@ struct HMM {
         {
             if(B[currState][i] > maximum)
             {
-                maximum = B[currState][i];
+                maximum = A[currState][i];
                 index = i;
             }
         }
@@ -238,7 +229,7 @@ struct HMM {
 
     double probability(Bird b)
     {
-        int T = b.getSeqLength()-1;
+        int T = b.getSeqLength();
         if(b.isDead())
         {
             for(int i=0;i<(int)b.getSeqLength();++i)
@@ -249,17 +240,19 @@ struct HMM {
                 }
         }
 
-        if(T>tTrain)
-            T = tTrain;
+        //if(T>tTrain)
+            //T = tTrain;
 
         //std::cerr << "Probability T= " << T << " N " << N << std::endl;
+        //reset q, so the initial probability is 1 for each
+        // state
         for(int i=0;i<N;++i)
             q[i] = 1.;
 
         double** alpha = initialize(T,N);
         double* c = (double*)calloc(T,sizeof(double));
 
-        alphaPass(alpha,c,T,b,false);
+        alphaPass(alpha,c,T,b,true);
 
         double sum = 0;
         for(int i = 0; i < N; ++ i)
@@ -267,7 +260,7 @@ struct HMM {
             sum += (alpha[T-1][i]);
         }
         //std::cerr << "Probability done" << std::endl;
-        return sum;
+        return sum/c[T-1]; //devide with c, since i used scaling in alphapass
     }
 
     double** initialize(int rows, int cols)

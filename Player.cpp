@@ -11,6 +11,7 @@ std::queue<data> Q;
 
 int kills;
 int shots;
+int lastBird = 0;
 
 
 Player::Player()
@@ -26,7 +27,7 @@ ESpecies Player::IDbird(Bird bird)
     {
         //std::cerr << i<< std::endl;
         double p = BirdModels[i].probability(bird);
-        //std::cerr << "prob done" <<std::endl;
+        //std::cerr << "prob: " << p << std::endl;
         if(p>prob)
         {
             prob = p;
@@ -34,8 +35,8 @@ ESpecies Player::IDbird(Bird bird)
         }
     }
     //std::cerr << "done" << std::endl;
-    std::cerr << "ID: " << prob << std::endl;
-    //if(prob < 1e-100)
+    //std::cerr << "ID: " << id << "prob" << prob << std::endl;
+    //if(prob < 0.2)
         //return SPECIES_UNKNOWN;
     return id;
 }
@@ -46,7 +47,7 @@ Action Player::shoot(const GameState &pState, const Deadline &pDue)
     //if(pState.getRound()<2 && pState.getBird(0).getSeqLength() < 40)
         return cDontShoot;
 
-    if(pState.getBird(0).getSeqLength() <40)
+    if(pState.getBird(0).getSeqLength() < 70)
         return cDontShoot;
 
 
@@ -55,9 +56,40 @@ Action Player::shoot(const GameState &pState, const Deadline &pDue)
     * This skeleton never shoots.
     */
 
+    //Build hmm models and calc next move
+    std::vector<ESpecies> sp;
+    std::vector<EMovement> mo;
+    std::vector<double> pr;
+
+    int i = 0;
+    while(i<(int)pState.getNumBirds() && pDue.remainingMs() > 500)
+    {
+        ESpecies species = IDbird(pState.getBird(i));
+        if(species != SPECIES_UNKNOWN && species != SPECIES_BLACK_STORK && pState.getBird(i).isAlive())
+        {
+            HMM temp;
+            temp.reset();
+            temp.BaumWelch(pState.getBird(i),200);
+            if(temp.Converged)
+            {
+                EMovement m = temp.nextMove(pState.getBird(i));
+                sp.push_back(species);
+                mo.push_back(m);
+            }
+        }
+    }
+    srand(time(NULL));
+    if(sp.size()!=0)
+    {
+        int r = rand()%sp.size();
+        return Action(sp[i],mo[r]);
+    }
+
+
+    /*
     for(int b=0;b<(int)pState.getNumBirds() && pDue.remainingMs() > 500;++b)
     {
-        Bird bird = pState.getBird(b);
+        Bird bird = pState.getBird((b+lastBird)%pState.getNumBirds());
         if(bird.isAlive())
         {
             ESpecies species = IDbird(bird);
@@ -74,12 +106,13 @@ Action Player::shoot(const GameState &pState, const Deadline &pDue)
                     {
                         std::cerr << "SHOOT" << std::endl;
                         shots++;
+                        lastBird = (b+lastBird)%pState.getNumBirds();
                         return Action(species, next);
                     }
                 }
             }
         }
-    }
+    }*/
     std::cerr << "dontShoot" << std::endl;
     return cDontShoot;
 
