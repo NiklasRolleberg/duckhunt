@@ -82,6 +82,7 @@ Action Player::shoot(const GameState &pState, const Deadline &pDue)
     if(sp.size()!=0)
     {
         int r = rand()%sp.size();
+        shots++;
         return Action(sp[i],mo[r]);
     }
 

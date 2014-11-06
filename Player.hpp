@@ -35,6 +35,8 @@ struct HMM {
     double**A;
     double**B;
     double*q;
+    double** alpha;
+    double** beta;
 
     bool Converged = false;
     int tTrain = 0;
@@ -157,54 +159,29 @@ struct HMM {
 
     EMovement nextMove(Bird b)
     {
-        std::cerr << "NextMove" << std::endl;
-        //find most probable hidden state
-        int T = b.getSeqLength();
-        int currState = 0;
-        float maxGamma = 0;
-        float denom = 0;
-
-        double**alpha = initialize(T,N);
-        double**beta = initialize(T,N);
-        double* c = (double*)calloc(T,sizeof(double));
-        double maximum = 0;
-
-        alphaPass(alpha,c,T,b,true);
-        betaPass(beta,c,T,b,true);
-
-
-        for(int j = 0; j < N; ++ j)
-        {
-            denom += alpha[T - 1][j];
-        }
-
-        for(int i = 0; i < N; ++ i)
-        {
-            float res = alpha[T-1][i] * beta[T-1][i] / denom;
-            if(res > maxGamma)
-            {
-                maxGamma = res;
-                currState = i;
-            }
-        }
-
+        std::cerr << "nextMove" << std::endl;
         //find the observation for that state
         int index = -1;
+        double maximum = 0;
 
-        //std::cerr << "currentState: " << currState << std::endl;
+        double* prob = (double*)calloc(N,sizeof(double));
 
-        for(int i = 0; i < N; ++i)
+        for(int i=0;i<N;++i)
         {
-            if(B[currState][i] > maximum)
+            prob[i] = alpha[tTrain-1][i]*B[i][b.getLastObservation()];
+        }
+
+        for(int i=0;i<N;++i)
+        {
+            if(prob[i]>maximum)
             {
-                maximum = A[currState][i];
-                index = i;
+                maximum = prob[i];
+                index = 1;
             }
         }
 
-        //std::cerr << "max: " << maximum << std::endl;
 
-        if(index == -1 || maximum < 0.95)
+        if(index == -1 || maximum < 0.3)
             return MOVE_DEAD;
 
         std::cerr << "\tshoot: probability= " << maximum << std::endl;
@@ -249,15 +226,15 @@ struct HMM {
         for(int i=0;i<N;++i)
             q[i] = 1.;
 
-        double** alpha = initialize(T,N);
+        double** ProbAlpha = initialize(T,N);
         double* c = (double*)calloc(T,sizeof(double));
 
-        alphaPass(alpha,c,T,b,true);
+        alphaPass(ProbAlpha,c,T,b,true);
 
         double sum = 0;
         for(int i = 0; i < N; ++ i)
         {
-            sum += (alpha[T-1][i]);
+            sum += (ProbAlpha[T-1][i]);
         }
         //std::cerr << "Probability done" << std::endl;
         return sum/c[T-1]; //devide with c, since i used scaling in alphapass
@@ -360,9 +337,14 @@ struct HMM {
         double OldLogProb = -std::numeric_limits<double>::max();
 
         //variabler som går att återanvända
+
+        alpha = initialize(T, N);  //alpha[time][index]
+        beta = initialize(T, N);  //beta[time][index]
+
+
         double* c = (double*) calloc(T,sizeof(double)); //c[time]
-        double** alpha = initialize(T, N);  //alpha[time][index]
-        double** beta = initialize(T, N);  //beta[time][index]
+        //double** alpha = initialize(T, N);  //alpha[time][index]
+        //double** beta = initialize(T, N);  //beta[time][index]
         double** Gamma = initialize(T,N);
         double*** diGamma = (double***)calloc(T,sizeof(double**)); //diGamma[time][index1][index2]
         for(int t=0;t<T;++t)
